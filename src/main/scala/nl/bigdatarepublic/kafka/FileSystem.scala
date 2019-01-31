@@ -1,5 +1,6 @@
 package nl.bigdatarepublic.kafka
 
+import java.io.File
 import java.nio.file._
 
 import scalaz.zio.IO
@@ -27,6 +28,15 @@ object FileSystem {
       Files.createDirectory(path)
     }
 
-  def deleteIfExists(path: Path): IO[Exception, Boolean] =
-    IO.syncException(Files.deleteIfExists(path))
+  def deleteIfExists(path: Path): IO[Exception, Unit] = {
+
+    def deleteRecursively(file: File): Unit = {
+      if (file.isDirectory)
+        file.listFiles.foreach(deleteRecursively)
+      if (file.exists && !file.delete)
+        throw new Exception(s"Unable to delete ${file.getAbsolutePath}")
+    }
+
+    IO.syncException(deleteRecursively(path.toFile))
+  }
 }
