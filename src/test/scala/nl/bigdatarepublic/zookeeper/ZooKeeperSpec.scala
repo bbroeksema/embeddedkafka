@@ -5,11 +5,9 @@ import scala.concurrent.{ExecutionContext, Promise => ScalaPromise, Future => Sc
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConverters._
 
-import nl.bigdatarepublic.kafka._
 import org.scalatest._
 import com.twitter.util.{Throw, Return, Future => TwitterFuture, _}
 import com.twitter.zk._
-import nl.bigdatarepublic.util.FileSystem
 import scalaz.zio._
 import scalaz.zio.interop.future._
 
@@ -33,21 +31,10 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
   implicit val timer: JavaTimer = new JavaTimer
   private val timeout: Duration = Duration(5L, TimeUnit.SECONDS)
 
-  def withRunningZooKeeper[E, T](body: => IO[E, T]): IO[Any, Unit] = {
-    for {
-      zkDir <- FileSystem.createTempDirectory("zookeeper")
-      zk    <- ZooKeeper.makeServer(zkDir, 2000)
-      rzk   <- ZooKeeper.startServer(zk, 2128)
-      _     <- body
-      _     <- ZooKeeper.stopServer(rzk)
-      _     <- FileSystem.deleteIfExists(zkDir)
-    } yield ()
-  }
-
   "A ZooKeeper instance" must {
     "be writable and readable" in {
-      val io = withRunningZooKeeper {
-        val zkClient = ZkClient("localhost:2128", timeout, timeout)
+      val io = ZooKeeper.withRunningZooKeeper() { zookeeper =>
+        val zkClient = ZkClient(zookeeper.connectionString, timeout, timeout)
           .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
         val writeNode = IO.fromFuture[ZNode](() =>
