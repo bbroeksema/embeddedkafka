@@ -1,13 +1,13 @@
 package nl.bigdatarepublic.zookeeper
 
 import java.util.concurrent.TimeUnit
-
-import com.twitter.util.{Future => TwitterFuture, Return, Throw}
-import scala.concurrent.{Future => ScalaFuture, Promise => ScalaPromise, ExecutionContext}
+import scala.concurrent.{ExecutionContext, Promise => ScalaPromise, Future => ScalaFuture}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.collection.JavaConverters._
 
 import nl.bigdatarepublic.kafka._
 import org.scalatest._
-import com.twitter.util._
+import com.twitter.util.{Throw, Return, Future => TwitterFuture, _}
 import com.twitter.zk._
 import scalaz.zio._
 import scalaz.zio.interop.future._
@@ -27,7 +27,7 @@ object ZooKeeperSpec {
 
 class ZooKeeperSpec extends WordSpec with Matchers with RTS {
 
-  import ZooKeeperSpec._
+  import nl.bigdatarepublic.zookeeper.ZooKeeperSpec._
 
   implicit val timer: JavaTimer = new JavaTimer
   private val timeout: Duration = Duration(5L, TimeUnit.SECONDS)
@@ -46,7 +46,6 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
   "A ZooKeeper instance" must {
     "be writable and readable" in {
       val io = withRunningZooKeeper {
-        import scala.concurrent.ExecutionContext.Implicits.global
         val zkClient = ZkClient("localhost:2128", timeout, timeout)
           .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
