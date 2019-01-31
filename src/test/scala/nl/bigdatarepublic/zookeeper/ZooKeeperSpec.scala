@@ -44,16 +44,31 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
   }
 
   "A ZooKeeper instance" must {
-    "be startable" in {
+    "be writable and readable" in {
       val io = withRunningZooKeeper {
         import scala.concurrent.ExecutionContext.Implicits.global
-
         val zkClient = ZkClient("localhost:2128", timeout, timeout)
-        IO.fromFuture[ZNode](() =>
-          zkClient
-            .withAcl(Seq())("/a")
+          .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+
+        val writeNode = IO.fromFuture[ZNode](() =>
+          zkClient("/a")
             .create("abc".getBytes)
-            .asScala)(global)
+            .asScala
+        )(global)
+
+        val readNode = IO.fromFuture[Unit](() => {
+          val node = zkClient("/a")
+          for {
+            d <- node.getData().asScala
+            _ = d.path shouldBe "/a"
+            _ = d.bytes shouldBe "abc".getBytes()
+          } yield ()
+        })(global)
+
+        for {
+          _ <- writeNode
+          _ <- readNode
+        } yield ()
       }
 
       unsafeRun(io)
