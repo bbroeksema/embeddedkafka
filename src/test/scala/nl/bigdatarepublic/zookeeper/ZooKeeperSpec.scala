@@ -9,6 +9,7 @@ import nl.bigdatarepublic.kafka._
 import org.scalatest._
 import com.twitter.util.{Throw, Return, Future => TwitterFuture, _}
 import com.twitter.zk._
+import nl.bigdatarepublic.util.FileSystem
 import scalaz.zio._
 import scalaz.zio.interop.future._
 
