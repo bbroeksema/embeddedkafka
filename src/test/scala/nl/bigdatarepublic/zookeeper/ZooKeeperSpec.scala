@@ -29,10 +29,10 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
 
   import ZooKeeperSpec._
 
-  implicit val timer = new JavaTimer
+  implicit val timer: JavaTimer = new JavaTimer
   private val timeout: Duration = Duration(5L, TimeUnit.SECONDS)
 
-  def withRunningZooKeeper[E, T](body: => IO[E, T]) = {
+  def withRunningZooKeeper[E, T](body: => IO[E, T]): IO[Any, Unit] = {
     for {
       zkDir <- FileSystem.createTempDirectory("zookeeper")
       zk    <- ZooKeeper.makeServer(zkDir, 2000)
