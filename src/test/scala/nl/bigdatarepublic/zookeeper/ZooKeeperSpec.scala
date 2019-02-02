@@ -1,6 +1,7 @@
 package nl.bigdatarepublic.zookeeper
 
 import java.util.concurrent.TimeUnit
+
 import scala.concurrent.{ExecutionContext, Promise => ScalaPromise, Future => ScalaFuture}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.collection.JavaConverters._
@@ -42,6 +43,40 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
           _ <- readNode(zkClient, "/a", "abc")
         } yield ()
       }
+
+      unsafeRun(io)
+    }
+  }
+
+  "multiple zookeeper instances" must {
+    val cfg1 = ZooKeeper.Config(port = 2182)
+    val cfg2 = ZooKeeper.Config(port = 2183)
+
+    "running intertwined without problems" in {
+
+      val io = for {
+        zk1  <- ZooKeeper.startServer(cfg1)
+        zkc1 = zkClientFromInstance(zk1)
+
+        _    <- writeNode(zkc1, "/a", "abc")
+
+        zk2  <- ZooKeeper.startServer(cfg2)
+        zkc2 = zkClientFromInstance(zk2)
+
+        _    <- writeNode(zkc1, "/b", "def")
+        _    <- writeNode(zkc2, "/c", "ghi")
+
+        _    <- readNode(zkc1, "/b", "def")
+        _    <- readNode(zkc2, "/c", "ghi")
+
+
+        _    <- ZooKeeper.stopServer(zk2)
+
+        _    <- readNode(zkc1, "/a", "abc")
+
+        _    <- ZooKeeper.stopServer(zk1)
+      } yield ()
+
 
       unsafeRun(io)
     }
