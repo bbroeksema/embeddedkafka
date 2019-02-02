@@ -17,37 +17,37 @@ object ZooKeeper {
 
   case class Config(port: Int = 2181, tickTime: Int = 1000, maxClientConnexions: Int = 1024)
 
-  private case class ZooKeeperInstanceImpl(cfg: Config, f: ServerCnxnFactory) extends ZooKeeperInstance {
+  private case class ZooKeeperInstanceImpl(cfg: Config, zkDir: Path, f: ServerCnxnFactory) extends ZooKeeperInstance {
     val host = "localhost"
     val port = cfg.port
   }
 
-  def makeServer(zkLogsDir: Path, tickTime: Int): IO[Exception, ZooKeeperServer] =
-    IO.syncException {
-      new ZooKeeperServer(zkLogsDir.toFile, zkLogsDir.toFile, tickTime)
-    }
+  def startServer(cfg: Config): IO[Exception, ZooKeeperInstance] =
+    for {
+      zkLogsDir <- FileSystem.createTempDirectory("zookeeper-" + cfg.port)
+      rzk       <- IO.syncException {
+        val zkServer = new ZooKeeperServer(zkLogsDir.toFile, zkLogsDir.toFile, cfg.tickTime)
+        val factory = ServerCnxnFactory.createFactory
 
-  def startServer(zkServer: ZooKeeperServer, cfg: Config): IO[Exception, ZooKeeperInstance] =
-    IO.syncException {
-      val factory: ServerCnxnFactory = ServerCnxnFactory.createFactory
-      factory.configure(new InetSocketAddress("localhost", cfg.port), cfg.maxClientConnexions)
-      factory.startup(zkServer)
-      ZooKeeperInstanceImpl(cfg, factory)
-    }
+        factory.configure(new InetSocketAddress("localhost", cfg.port), cfg.maxClientConnexions)
+        factory.startup(zkServer)
+        ZooKeeperInstanceImpl(cfg, zkLogsDir, factory)
+      }
+    } yield rzk
 
-  def stopServer(server: ZooKeeperInstance): IO[Exception, Unit] =
-    IO.syncException {
-      server.asInstanceOf[ZooKeeperInstanceImpl].f.shutdown()
-    }
+  def stopServer(server: ZooKeeperInstance): IO[Exception, Unit] = {
+    val zk = server.asInstanceOf[ZooKeeperInstanceImpl]
+    for {
+      _ <- IO.syncException { zk.f.shutdown() }
+      _ <- FileSystem.deleteIfExists(zk.zkDir)
+    } yield ()
+  }
 
   def withRunningZooKeeper[E, T](cfg: Config = Config())(body: ZooKeeperInstance => IO[E, T]): IO[Any, Unit] = {
     for {
-      zkDir <- FileSystem.createTempDirectory("zookeeper")
-      zk    <- ZooKeeper.makeServer(zkDir, cfg.tickTime)
-      rzk   <- ZooKeeper.startServer(zk, cfg)
+      rzk   <- ZooKeeper.startServer(cfg)
       _     <- body(rzk)
       _     <- ZooKeeper.stopServer(rzk)
-      _     <- FileSystem.deleteIfExists(zkDir)
     } yield ()
   }
 }
