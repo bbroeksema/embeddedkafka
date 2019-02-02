@@ -37,28 +37,36 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
         val zkClient = ZkClient(zookeeper.connectionString, timeout, timeout)
           .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
-        val writeNode = IO.fromFuture[ZNode](() =>
-          zkClient("/a")
-            .create("abc".getBytes)
-            .asScala
-        )(global)
-
-        val readNode = IO.fromFuture[Unit](() => {
-          val node = zkClient("/a")
-          for {
-            d <- node.getData().asScala
-            _ = d.path shouldBe "/a"
-            _ = d.bytes shouldBe "abc".getBytes()
-          } yield ()
-        })(global)
-
         for {
-          _ <- writeNode
-          _ <- readNode
+          _ <- writeNode(zkClient, "/a", "abc")
+          _ <- readNode(zkClient, "/a", "abc")
         } yield ()
       }
 
       unsafeRun(io)
     }
   }
+
+  private def zkClientFromInstance(zki: ZooKeeperInstance): ZkClient = {
+    ZkClient(zki.connectionString, timeout, timeout)
+      .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+  }
+
+  private def writeNode(zkc: ZkClient, path: String, data: String): IO[Throwable, ZNode] = {
+    IO.fromFuture[ZNode](() =>
+      zkc(path)
+        .create(data.getBytes)
+        .asScala
+    )(global)
+  }
+
+  private def readNode(zkc: ZkClient, path: String, expectedData: String): IO[Throwable, Unit] =
+    IO.fromFuture[Unit](() => {
+      val node = zkc(path)
+      for {
+        d <- node.getData().asScala
+        _ = d.path shouldBe path
+        _ = d.bytes shouldBe expectedData.getBytes()
+      } yield ()
+    })(global)
 }
