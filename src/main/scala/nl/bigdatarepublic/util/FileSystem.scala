@@ -1,28 +1,19 @@
 package nl.bigdatarepublic.util
 
 import scalaz.zio.IO
-import java.io.File
+import java.io._
 import java.nio.file._
 
 object FileSystem {
 
-  /**
-    * IllegalArgumentException - if the prefix cannot be used to generate a
-    * candidate directory name
-    * UnsupportedOperationException - if the array contains an attribute that
-    * cannot be set atomically when creating the directory
-    * IOException - if an I/O error occurs or the temporary-file directory does
-    * not exist
-    * SecurityException - In the case of the default provider, and a security
-    * manager is installed, the checkWrite method is invoked to check write access when creating the directory.
-    *
-    * @param prefix
-    * @return
-    */
   def createTempDirectory(prefix: String): IO[Exception, Path] =
     IO.syncException {
-      val path = Files.createTempDirectory(prefix)
-      Files.deleteIfExists(path)
+      val tmpDir = System.getProperty("java.io.tmpdir")
+      val path = Paths.get(tmpDir + File.separator + prefix)
+
+      if (Files.exists(path))
+        throw new IOException(s"${path.toAbsolutePath.toString} already exists")
+
       Files.createDirectory(path)
     }
 
