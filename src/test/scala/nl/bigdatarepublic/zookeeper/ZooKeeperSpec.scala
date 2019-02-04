@@ -1,5 +1,7 @@
 package nl.bigdatarepublic.zookeeper
 
+import java.io.File
+import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
 
 import scala.concurrent.{ExecutionContext, Promise => ScalaPromise, Future => ScalaFuture}
@@ -77,6 +79,21 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
         _    <- ZooKeeper.stopServer(zk1)
       } yield ()
 
+
+      unsafeRun(io)
+    }
+
+    "properly clean up in case of exceptions" in {
+      val io = (for {
+        zk1  <- ZooKeeper.startServer(cfg1)
+        zk2  <- ZooKeeper.startServer(cfg1) // Shouldn't work as there is already one running on 2182
+      } yield ()).attempt.map { either =>
+        either.isLeft shouldBe true
+
+        val tmpDir = System.getProperty("java.io.tmpdir")
+        val path = Paths.get(tmpDir + File.separator + "zookeeper-" + cfg1.port)
+        path.toFile.exists() shouldBe false
+      }
 
       unsafeRun(io)
     }
