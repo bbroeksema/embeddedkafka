@@ -34,7 +34,7 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
 
   "A ZooKeeper instance" must {
     "be writable and readable" in {
-      val io = ZooKeeper.withRunningZooKeeper() { zookeeper =>
+      val io = DefaultZooKeeper.withRunningZooKeeper() { zookeeper =>
         val zkClient = ZkClient(zookeeper.connectionString, timeout, timeout)
           .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
@@ -55,12 +55,12 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
     "running intertwined without problems" in {
 
       val io = for {
-        zk1  <- ZooKeeper.startServer(cfg1)
+        zk1  <- DefaultZooKeeper.startServer(cfg1)
         zkc1 = zkClientFromInstance(zk1)
 
         _    <- writeNode(zkc1, "/a", "abc")
 
-        zk2  <- ZooKeeper.startServer(cfg2)
+        zk2  <- DefaultZooKeeper.startServer(cfg2)
         zkc2 = zkClientFromInstance(zk2)
 
         _    <- writeNode(zkc1, "/b", "def")
@@ -70,11 +70,11 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
         _    <- readNode(zkc2, "/c", "ghi")
 
 
-        _    <- ZooKeeper.stopServer(zk2)
+        _    <- DefaultZooKeeper.stopServer(zk2)
 
         _    <- readNode(zkc1, "/a", "abc")
 
-        _    <- ZooKeeper.stopServer(zk1)
+        _    <- DefaultZooKeeper.stopServer(zk1)
       } yield ()
 
 

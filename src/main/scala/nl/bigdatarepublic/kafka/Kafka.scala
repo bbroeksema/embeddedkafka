@@ -2,13 +2,12 @@ package nl.bigdatarepublic.kafka
 
 import java.nio.file.Path
 
-import scala.collection.JavaConverters._
-
 import kafka.server._
+import nl.bigdatarepublic.util.NioFileSystem
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import scalaz.zio.IO
 
-import nl.bigdatarepublic.util.FileSystem
+import scala.collection.JavaConverters._
 
 sealed trait KafkaBrokerInstance {
   def host: String
@@ -33,7 +32,7 @@ object Kafka {
 
   def startServer(kafkaLogsDir: Path, config: Config): IO[Exception, Unit] = {
     for {
-      kafkaLogsDir <- FileSystem.createTempDirectory(s"kafka-${config.kafkaPort}")
+      kafkaLogsDir <- NioFileSystem.createTempDirectory(s"kafka-${config.kafkaPort}")
       kafkaServer  <- IO.syncException {
         val zkAddress = s"localhost:${config.zooKeeperPort}"
         val listener = s"${SecurityProtocol.PLAINTEXT}://localhost:${config.kafkaPort}"
@@ -67,7 +66,7 @@ object Kafka {
     val kafkaServer = server.asInstanceOf[KafkaServerInstanceImpl]
     for {
       _ <- IO.syncException { kafkaServer.s.shutdown() }
-      _ <- FileSystem.deleteIfExists(kafkaServer.kafkaLogsDir)
+      _ <- NioFileSystem.deleteIfExists(kafkaServer.kafkaLogsDir)
     } yield ()
   }
 }

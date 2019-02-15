@@ -1,10 +1,18 @@
 package nl.bigdatarepublic.util
 
-import scalaz.zio.IO
 import java.io._
 import java.nio.file._
 
-object FileSystem {
+import scalaz.zio.IO
+
+trait FileSystem {
+
+  def createTempDirectory(prefix: String): IO[Exception, Path]
+
+  def deleteIfExists(path: Path): IO[Exception, Unit]
+}
+
+object NioFileSystem extends FileSystem {
 
   def createTempDirectory(prefix: String): IO[Exception, Path] =
     IO.syncException {
