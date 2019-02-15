@@ -1,16 +1,19 @@
 package nl.bigdatarepublic.zookeeper
 
+import java.io.IOException
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-import scala.concurrent.{ExecutionContext, Promise => ScalaPromise, Future => ScalaFuture}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.collection.JavaConverters._
-
-import org.scalatest._
-import com.twitter.util.{Throw, Return, Future => TwitterFuture, _}
+import com.twitter.util.{Duration, JavaTimer, Return, Throw, Future => TwitterFuture}
 import com.twitter.zk._
+import nl.bigdatarepublic.util.FileSystem
+import org.scalatest._
 import scalaz.zio._
 import scalaz.zio.interop.future._
+
+import scala.collection.JavaConverters._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{ExecutionContext, Future => ScalaFuture, Promise => ScalaPromise}
 
 object ZooKeeperSpec {
   implicit class RichTwitterFuture[A](val tf: TwitterFuture[A]) extends AnyVal {
@@ -32,28 +35,67 @@ class ZooKeeperSpec extends WordSpec with Matchers with RTS {
   implicit val timer: JavaTimer = new JavaTimer
   private val timeout: Duration = Duration(5L, TimeUnit.SECONDS)
 
-  "A ZooKeeper instance" must {
-    "be writable and readable" in {
-      val io = DefaultZooKeeper.withRunningZooKeeper() { zookeeper =>
-        val zkClient = ZkClient(zookeeper.connectionString, timeout, timeout)
-          .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+  "ZooKeeper.withRunningZooKeeper" when {
+    "a temp dir can be created" must {
+      "provide a writable and readable ZooKeeper instance" in {
+        val io = DefaultZooKeeper.withRunningZooKeeper() { zookeeper =>
+          val zkClient = ZkClient(zookeeper.connectionString, timeout, timeout)
+            .withAcl(org.apache.zookeeper.ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
 
-        for {
-          _ <- writeNode(zkClient, "/a", "abc")
-          _ <- readNode(zkClient, "/a", "abc")
-        } yield ()
+          for {
+            _ <- writeNode(zkClient, "/a", "abc")
+            _ <- readNode(zkClient, "/a", "abc")
+          } yield ()
+        }
+
+        unsafeRun(io)
+      }
+    }
+
+    "no temp dir can be created" must {
+      val mockException = new IOException("Mock exception")
+      val failingFileSystem = new FileSystem {
+        override def createTempDirectory(prefix: String): IO[Exception, Path] = IO.fail(mockException)
+
+        override def deleteIfExists(path: Path): IO[Exception, Unit] = IO.fail(mockException)
       }
 
-      unsafeRun(io)
+      "return the inner exception" in {
+        val io = new ZooKeeper(failingFileSystem).withRunningZooKeeper() { _ =>
+          IO.now(Unit)
+        }
+
+        unsafeRun(io.attempt) should equal(Left(mockException))
+      }
+
+      "not try to delete the temp dir" in {
+        val zk = new ZooKeeper(new FileSystem {
+          override def createTempDirectory(prefix: String): IO[Exception, Path] = IO.fail(mockException)
+
+          override def deleteIfExists(path: Path): IO[Exception, Unit] = IO.fail {
+            assert(false, "deleteIfExists should not be called")
+            mockException
+          }
+        })
+
+        val io = zk.withRunningZooKeeper() { _ =>
+          IO.now(Unit)
+        }
+
+        io.attempt
+      }
+
+      "not try to create a ZooKeeper instance" in {
+        // TODO
+      }
     }
   }
 
-  "multiple zookeeper instances" must {
+  "Multiple zookeeper instances" must {
     val cfg1 = ZooKeeper.Config(port = 2182)
     val cfg2 = ZooKeeper.Config(port = 2183)
 
-    "running intertwined without problems" in {
-
+    "run intertwined without problems" in {
       val io = for {
         zk1  <- DefaultZooKeeper.startServer(cfg1)
         zkc1 = zkClientFromInstance(zk1)
